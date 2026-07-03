@@ -26,6 +26,9 @@ header.top h1 { font-size: 16px; margin: 0; font-weight: 600; }
 header.top nav { margin-left: auto; display: flex; gap: 10px; }
 header.top nav a { color: #d4d4d8; text-decoration: none; font-size: 13px; }
 header.top nav a.active { color: #fff; font-weight: 600; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: #fff; }
+.brand-logo { width: 30px; height: 30px; border-radius: 7px; object-fit: cover; display: block; }
+.brand-name { font-size: 18px; font-weight: 700; letter-spacing: .01em; }
 .wrap { max-width: 860px; margin: 0 auto; padding: 24px 20px 80px; }
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
