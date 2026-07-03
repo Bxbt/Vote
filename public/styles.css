@@ -95,6 +95,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   margin-top: 14px; padding: 12px 16px; border: 1px dashed var(--brand); border-radius: 10px; background: #eef2ff;
 }
 .joincode { font-size: 26px; font-weight: 800; letter-spacing: .18em; color: var(--brand); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.joinlink { font-size: 12px; color: var(--muted); margin-top: 4px; word-break: break-all; }
+.joincode-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.joincode-actions button { white-space: nowrap; }
 
 .edit-list { list-style: none; padding: 0; margin: 8px 0 0; }
 .edit-row {

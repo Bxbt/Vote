@@ -143,3 +143,12 @@ function escapeHtml(s) {
 $('loadBtn').addEventListener('click', loadBallot);
 $('submitBtn').addEventListener('click', submitVote);
 $('cancelBtn').addEventListener('click', () => $('voteCard').classList.add('hidden'));
+
+// Deep link: /?code=XXXX prefills the session code and enters the room automatically.
+(function initFromUrl() {
+  const code = new URLSearchParams(location.search).get('code');
+  if (code) {
+    $('joinCode').value = code.trim().toUpperCase();
+    loadBallot();
+  }
+})();

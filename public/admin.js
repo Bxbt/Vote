@@ -107,6 +107,7 @@ async function refresh() {
     if (session.joinCode) {
       $('joinCodeBox').classList.remove('hidden');
       $('joinCodeValue').textContent = session.joinCode;
+      $('joinLink').textContent = voteLink(session.joinCode);
     }
 
     // We reuse the ballot endpoint for the setup listing; a dummy voterId just yields alreadyVoted=false.
@@ -215,8 +216,22 @@ $('addPresenterBtn').addEventListener('click', addPresenter);
 $('openBtn').addEventListener('click', openSession);
 $('closeBtn').addEventListener('click', closeSession);
 $('resultsBtn').addEventListener('click', loadResults);
-$('copyCodeBtn').addEventListener('click', async () => {
-  const code = $('joinCodeValue').textContent.trim();
-  try { await navigator.clipboard.writeText(code); toast(`คัดลอกโค้ด ${code} แล้ว`); }
-  catch { toast('คัดลอกไม่สำเร็จ', 'err'); }
-});
+// Shareable voter link with the code embedded — opening it auto-fills the code and enters the room.
+const voteLink = (code) => `${location.origin}/?code=${encodeURIComponent(code)}`;
+
+async function copyToClipboard(text, okMsg) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(okMsg);
+  } catch {
+    // Fallback for browsers/contexts where the async clipboard API is blocked.
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast(okMsg); } catch { toast('คัดลอกไม่สำเร็จ', 'err'); }
+    ta.remove();
+  }
+}
+
+$('copyCodeBtn').addEventListener('click', () => copyToClipboard($('joinCodeValue').textContent.trim(), 'คัดลอกโค้ดแล้ว'));
+$('copyLinkBtn').addEventListener('click', () => copyToClipboard(voteLink($('joinCodeValue').textContent.trim()), 'คัดลอกลิงก์เชิญโหวตแล้ว'));
