@@ -1,7 +1,9 @@
-# Portainer stack for vote.bboybezz.xyz
-# Works two ways:
-#   - Git stack: Portainer clones this repo and builds the image on the host (uses `build:`).
-#   - Registry:  set VOTE_IMAGE to a prebuilt image and Portainer just pulls it.
+# Portainer Git stack for vote.bboybezz.xyz
+# Routing: a per-stack cloudflared sidecar connects the Cloudflare Tunnel to the app
+# over the internal compose network (service target in Cloudflare dashboard: http://vote:3000).
+#
+# The tunnel token is NOT stored here — it is injected as the Portainer stack env var
+# TUNNEL_TOKEN so it never lands in this public repo.
 services:
   vote:
     build: .
@@ -13,22 +15,18 @@ services:
       - DB_FILE=/data/voting.db
     volumes:
       - vote-data:/data
-    # Expose a host port for a reverse proxy / Cloudflare Tunnel to target.
-    # Change the left side if 8080 is taken on the host.
-    ports:
-      - "${VOTE_PORT:-8080}:3000"
-    # --- Traefik routing (uncomment if this host uses Traefik) -------------
-    # networks: [proxy]
-    # labels:
-    #   - "traefik.enable=true"
-    #   - "traefik.http.routers.vote.rule=Host(`vote.bboybezz.xyz`)"
-    #   - "traefik.http.routers.vote.entrypoints=websecure"
-    #   - "traefik.http.routers.vote.tls.certresolver=letsencrypt"
-    #   - "traefik.http.services.vote.loadbalancer.server.port=3000"
+    # No host port is published — access is via the Cloudflare Tunnel below.
+    # For local debugging you can temporarily add:  ports: ["8080:3000"]
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: vote-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - vote
 
 volumes:
   vote-data:
-
-# networks:
-#   proxy:
-#     external: true
