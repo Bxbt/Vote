@@ -144,11 +144,8 @@ $('loadBtn').addEventListener('click', loadBallot);
 $('submitBtn').addEventListener('click', submitVote);
 $('cancelBtn').addEventListener('click', () => $('voteCard').classList.add('hidden'));
 
-// Deep link: /?code=XXXX prefills the session code and enters the room automatically.
+// Deep link: /?code=XXXX only prefills the session code — the user still presses "เข้าห้องโหวต".
 (function initFromUrl() {
   const code = new URLSearchParams(location.search).get('code');
-  if (code) {
-    $('joinCode').value = code.trim().toUpperCase();
-    loadBallot();
-  }
+  if (code) $('joinCode').value = code.trim().toUpperCase();
 })();

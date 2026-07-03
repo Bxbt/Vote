@@ -10,7 +10,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export function createApp(service) {
   const app = express();
   app.use(express.json());
-  app.use(express.static(path.join(__dirname, '..', 'public')));
+  // no-cache = browsers may store but must revalidate (via ETag) before use, so a redeploy
+  // never leaves a device running a stale app.js/index.html.
+  app.use(express.static(path.join(__dirname, '..', 'public'), {
+    etag: true,
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+  }));
 
   // Wrap async/sync handlers so thrown ApiErrors become clean JSON responses.
   const h = (fn) => (req, res) => {
