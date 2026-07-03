@@ -73,19 +73,20 @@ test/           voting.test.js — TC-1..TC-14
 
 ## Deploy (Docker / Portainer + Cloudflare Tunnel)
 
-Deploy เป็น **Git stack** บน Portainer (host clone repo แล้ว build image ให้เอง) และเปิดเว็บที่
-`vote.bboybezz.xyz` ผ่าน **Cloudflare Tunnel**
+Production รันเป็น **Git stack** บน Portainer (host clone repo แล้ว build image เอง) และเปิดเว็บที่
+**https://vote.bboybezz.xyz** ผ่าน **Cloudflare Tunnel** (cloudflared sidecar ในตัว stack)
 
-ไฟล์ที่เกี่ยวข้อง: `Dockerfile` (multi-stage, non-root, healthcheck), `docker-compose.yml`, `.dockerignore`
-ฐานข้อมูล SQLite เก็บใน named volume `vote-data` ที่ `/data` (คงอยู่ข้ามการ redeploy)
+ไฟล์: `Dockerfile` (multi-stage, non-root, healthcheck), `docker-compose.yml`, `.dockerignore`
+- `vote` — แอป Node/Express (ไม่ publish host port — เข้าผ่าน tunnel เท่านั้น)
+- `cloudflared` — เชื่อม Cloudflare Tunnel → `http://vote:3000` ผ่าน network ภายในของ stack
+- SQLite เก็บใน named volume `vote-data` ที่ `/data` (คงอยู่ข้าม redeploy)
 
 ### ขั้นตอน
 1. **Portainer → Stacks → Add stack → Git repository**
-   - Repository URL: `https://github.com/Bxbt/Vote`
-   - Compose path: `docker-compose.yml`
-   - Deploy — Portainer จะ build image และรัน container ชื่อ `vote` เปิดพอร์ต host `8080` (ปรับได้ด้วย env `VOTE_PORT`)
-2. **Cloudflare Tunnel**: เพิ่ม public hostname
-   - Subdomain `vote` → domain `bboybezz.xyz`
-   - Service: `http://<host>:8080` (หรือ `http://vote:3000` ถ้า cloudflared อยู่ Docker network เดียวกัน)
+   - Repository URL: `https://github.com/Bxbt/Vote` · Reference: `refs/heads/main` · Compose path: `docker-compose.yml`
+2. **Environment variable** (ในหน้า Add stack): `TUNNEL_TOKEN` = tunnel token ของ `vote.bboybezz.xyz`
+   *(เก็บใน Portainer เท่านั้น — ไม่อยู่ใน repo)*
+3. **Cloudflare (Zero Trust → Tunnels)**: public hostname `vote.bboybezz.xyz` → service `http://vote:3000`
+4. Deploy — Portainer จะ build + รัน `vote` และ `vote-cloudflared`
 
-ตัวแปรที่ปรับได้: `VOTE_PORT` (host port, default 8080), `VOTE_IMAGE` (ถ้าใช้ image จาก registry แทนการ build)
+ตัวแปรที่ปรับได้: `TUNNEL_TOKEN` (จำเป็น), `VOTE_IMAGE` (ใช้ image จาก registry แทนการ build)
