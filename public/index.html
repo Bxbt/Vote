@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vote — Voter</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>System Design Voting</h1>
+    <nav>
+      <a href="/" class="active">Voter</a>
+      <a href="/admin.html">Admin</a>
+    </nav>
+  </header>
+
+  <div class="wrap">
+    <div class="card" id="loginCard">
+      <h2>เข้าสู่การโหวต</h2>
+      <p class="muted">กรอก Session ID และ Voter (participant) ID ที่ได้จากผู้ดูแล แล้วกดโหลด ballot</p>
+      <div class="row">
+        <div>
+          <label>Session ID</label>
+          <input id="sessionId" placeholder="session-xxxxxxxx" />
+        </div>
+        <div>
+          <label>Voter ID (participantId)</label>
+          <input id="voterId" placeholder="participant-xxxxxxxx" />
+        </div>
+      </div>
+      <div class="mt"><button class="primary" id="loadBtn">โหลด Ballot</button></div>
+    </div>
+
+    <div class="card hidden" id="ballotCard">
+      <h2>เลือกผู้นำเสนอ <span id="sessionStatus"></span></h2>
+      <p class="muted" id="progress"></p>
+      <div class="presenter-list" id="presenterList"></div>
+    </div>
+
+    <div class="card hidden" id="voteCard">
+      <h2>ให้คะแนน: <span id="votePresenterName"></span></h2>
+      <div id="categoryList"></div>
+      <div class="mt row">
+        <button class="primary" id="submitBtn">ส่งคะแนน</button>
+        <button class="ghost" id="cancelBtn">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "system-design-voting",
+  "version": "1.0.0",
+  "description": "Voting system for System Design presentations — 10 presenters, configurable score categories, 1–5 stars, one vote per (voter, presenter, session).",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "seed": "node src/seed.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "express": "^4.21.2"
+  }
+}

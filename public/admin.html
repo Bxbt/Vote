@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vote — Admin</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>System Design Voting</h1>
+    <nav>
+      <a href="/">Voter</a>
+      <a href="/admin.html" class="active">Admin</a>
+    </nav>
+  </header>
+
+  <div class="wrap">
+    <div class="card">
+      <h2>1. สร้าง / เลือกรอบโหวต</h2>
+      <div class="row">
+        <div>
+          <label>ชื่อรอบโหวต</label>
+          <input id="sessionName" placeholder="System Design Vote — Today" />
+        </div>
+        <div>
+          <label>วันที่กิจกรรม</label>
+          <input id="eventDate" type="date" />
+        </div>
+      </div>
+      <div class="mt row">
+        <button class="primary" id="createSessionBtn">สร้างรอบโหวต</button>
+        <button class="ghost" id="seedBtn">Seed ตัวอย่าง (5 หมวด + a1..a10)</button>
+      </div>
+      <div class="mt">
+        <label>Session ID ที่กำลังจัดการ</label>
+        <input id="activeSessionId" placeholder="session-xxxxxxxx" />
+        <div class="mt"><button class="ghost small" id="refreshBtn">โหลดข้อมูล session</button>
+          <span id="statusBadge" class="muted"></span></div>
+      </div>
+    </div>
+
+    <div class="card" id="setupCard">
+      <h2>2. ตั้งค่ารอบโหวต</h2>
+      <h3>ประเภทคะแนน</h3>
+      <div class="row">
+        <div><label>ชื่อประเภท</label><input id="catName" placeholder="Wow Factor" /></div>
+        <div><label>ลำดับ</label><input id="catOrder" type="number" value="1" /></div>
+      </div>
+      <label>คำอธิบาย (ไม่บังคับ)</label>
+      <input id="catDesc" placeholder="ความน่าประทับใจของแนวคิด" />
+      <div class="mt"><button class="small" id="addCatBtn">+ เพิ่มประเภทคะแนน</button></div>
+      <ul id="catList" class="muted mt"></ul>
+
+      <h3>ผู้นำเสนอ (ต้องครบ 10 คน)</h3>
+      <div class="row">
+        <div><label>รหัส (code)</label><input id="pCode" placeholder="a1" /></div>
+        <div><label>ชื่อ</label><input id="pName" placeholder="Presenter A1" /></div>
+        <div><label>ลำดับนำเสนอ</label><input id="pOrder" type="number" placeholder="1" /></div>
+      </div>
+      <label>หัวข้อ (ไม่บังคับ)</label>
+      <input id="pTopic" placeholder="System Design Topic" />
+      <div class="mt"><button class="small" id="addPresenterBtn">+ เพิ่มผู้นำเสนอ</button></div>
+      <ul id="presenterAdminList" class="muted mt"></ul>
+    </div>
+
+    <div class="card">
+      <h2>3. เปิด / ปิดรอบโหวต</h2>
+      <div class="row">
+        <button class="primary" id="openBtn">เปิดรอบโหวต</button>
+        <button id="closeBtn">ปิดรอบโหวต</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>4. ผลคะแนน &amp; อันดับ</h2>
+      <div class="mt"><button class="ghost small" id="resultsBtn">โหลดผลคะแนน</button></div>
+      <div id="resultsArea" class="mt"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="admin.js"></script>
+</body>
+</html>
