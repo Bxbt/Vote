@@ -38,6 +38,13 @@
         <div class="mt"><button class="ghost small" id="refreshBtn">โหลดข้อมูล session</button>
           <span id="statusBadge" class="muted"></span></div>
       </div>
+      <div class="joincode-box hidden" id="joinCodeBox">
+        <div>
+          <div class="muted" style="font-size:12px">รหัสเข้าห้องสำหรับผู้โหวต (แชร์โค้ดนี้)</div>
+          <div class="joincode" id="joinCodeValue">—</div>
+        </div>
+        <button class="ghost small" id="copyCodeBtn">คัดลอกโค้ด</button>
+      </div>
     </div>
 
     <div class="card" id="setupCard">
@@ -52,7 +59,7 @@
       <div class="mt"><button class="small" id="addCatBtn">+ เพิ่มประเภทคะแนน</button></div>
       <ul id="catList" class="muted mt"></ul>
 
-      <h3>ผู้นำเสนอ (ต้องครบ 10 คน)</h3>
+      <h3>ผู้นำเสนอ (เพิ่มได้ไม่จำกัด — อย่างน้อย 1 คน)</h3>
       <div class="row">
         <div><label>รหัส (code)</label><input id="pCode" placeholder="a1" /></div>
         <div><label>ชื่อ</label><input id="pName" placeholder="Presenter A1" /></div>

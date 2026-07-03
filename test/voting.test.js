@@ -158,3 +158,68 @@ test('TC-14: presenterId not in session is rejected (FR-13)', () => {
     (e) => e instanceof ApiError && e.status === 400,
   );
 });
+
+// ---- New behaviours -----------------------------------------------------
+
+test('presenters are unlimited: a session with 1 presenter can open, and 15 can be added', () => {
+  const service = newService();
+  const one = openSessionWith(service, { nPresenters: 1 });
+  assert.equal(service.getSessionOrThrow(one.session.id).status, 'open');
+
+  const many = service.createSession({ name: 'Big' });
+  service.addCategory(many.id, { name: 'Wow' });
+  for (let i = 1; i <= 15; i++) service.addPresenter(many.id, { participantCode: `p${i}`, displayName: `P${i}`, presentationOrder: i });
+  service.openSession(many.id);
+  assert.equal(service._q.presenterCount.get(many.id).n, 15);
+});
+
+test('join by code: voter joins with only the session code and gets a fresh identity', () => {
+  const service = newService();
+  const { session } = openSessionWith(service, { nPresenters: 3 });
+  const code = service.getSessionOrThrow(session.id).joinCode;
+  assert.match(code, /^[A-Z2-9]{6}$/);
+
+  // Code resolves case-insensitively.
+  const resolved = service.getSessionByCode(code.toLowerCase());
+  assert.equal(resolved.id, session.id);
+
+  const v1 = service.joinAsVoter(session.id, { displayName: 'Walk-in 1' });
+  const v2 = service.joinAsVoter(session.id, {});
+  assert.notEqual(v1.id, v2.id); // each join is a distinct voter identity
+  assert.equal(v2.displayName, 'Guest voter');
+});
+
+test('unknown session code is rejected with 404', () => {
+  const service = newService();
+  assert.throws(() => service.getSessionByCode('ZZZZZZ'), (e) => e instanceof ApiError && e.status === 404);
+});
+
+test('editing a category renames it and reordering a presenter persists', () => {
+  const service = newService();
+  const { session, cats, presenters } = openSessionWith(service, { nPresenters: 2 });
+  const edited = service.editCategory(session.id, cats[0].id, { name: 'Renamed', displayOrder: 9 });
+  assert.equal(edited.name, 'Renamed');
+  assert.equal(service._q.categoryById.get(cats[0].id).displayOrder, 9);
+
+  const p = service.editPresenter(session.id, presenters[1].id, { displayName: 'New Name', presentationOrder: 1 });
+  assert.equal(p.displayName, 'New Name');
+  assert.equal(service._q.presenterById.get(presenters[1].id).presentationOrder, 1);
+});
+
+test('deleting a presenter is allowed with no votes but blocked once votes exist', () => {
+  const service = newService();
+  const { session, cats, presenters } = openSessionWith(service, { nPresenters: 3 });
+  // No votes yet -> deletable.
+  assert.deepEqual(service.removePresenter(session.id, presenters[2].id), { ok: true });
+
+  // Vote for presenter[0], then deletion is blocked.
+  service.submitVote(session.id, { voterId: participantId(service, session, 'a2'), presenterId: presenters[0].id, scores: fullScores(cats) });
+  assert.throws(() => service.removePresenter(session.id, presenters[0].id), (e) => e instanceof ApiError && e.status === 409);
+});
+
+test('deleting a category with recorded scores is blocked', () => {
+  const service = newService();
+  const { session, cats, presenters } = openSessionWith(service, { nPresenters: 2 });
+  service.submitVote(session.id, { voterId: participantId(service, session, 'a2'), presenterId: presenters[0].id, scores: fullScores(cats) });
+  assert.throws(() => service.removeCategory(session.id, cats[0].id), (e) => e instanceof ApiError && e.status === 409);
+});

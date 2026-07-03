@@ -34,14 +34,37 @@ export function createApp(service) {
     return service.addCategory(req.params.sessionId, req.body ?? {});
   }));
 
+  app.patch('/voting-sessions/:sessionId/categories/:categoryId', h((req) =>
+    service.editCategory(req.params.sessionId, req.params.categoryId, req.body ?? {})));
+
+  app.delete('/voting-sessions/:sessionId/categories/:categoryId', h((req) =>
+    service.removeCategory(req.params.sessionId, req.params.categoryId)));
+
   app.post('/voting-sessions/:sessionId/presenters', h((req, res) => {
     res.status(201);
     return service.addPresenter(req.params.sessionId, req.body ?? {});
   }));
 
+  app.patch('/voting-sessions/:sessionId/presenters/:presenterId', h((req) =>
+    service.editPresenter(req.params.sessionId, req.params.presenterId, req.body ?? {})));
+
+  app.delete('/voting-sessions/:sessionId/presenters/:presenterId', h((req) =>
+    service.removePresenter(req.params.sessionId, req.params.presenterId)));
+
   app.post('/voting-sessions/:sessionId/voters', h((req, res) => {
     res.status(201);
     return service.addVoter(req.params.sessionId, req.body ?? {});
+  }));
+
+  // Public voter self-join: resolve a short code, then mint an anonymous voter identity.
+  app.get('/voting-sessions/by-code/:code', h((req) => {
+    const s = service.getSessionByCode(req.params.code);
+    return { sessionId: s.id, name: s.name, status: s.status, joinCode: s.joinCode };
+  }));
+
+  app.post('/voting-sessions/:sessionId/join', h((req, res) => {
+    res.status(201);
+    return service.joinAsVoter(req.params.sessionId, req.body ?? {});
   }));
 
   app.post('/voting-sessions/:sessionId/open', h((req) => service.openSession(req.params.sessionId)));

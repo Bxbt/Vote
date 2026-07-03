@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS VotingSession (
   name       TEXT NOT NULL,
   eventDate  TEXT,
   status     TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','open','closed')),
+  joinCode   TEXT,
   createdAt  TEXT NOT NULL,
   updatedAt  TEXT NOT NULL
 );
@@ -64,6 +65,32 @@ CREATE INDEX IF NOT EXISTS idx_votescore_lookup     ON VoteScore(voteId, categor
 CREATE INDEX IF NOT EXISTS idx_category_order        ON ScoreCategory(sessionId, displayOrder);
 `;
 
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L to avoid confusion
+function randomCode(len = 6) {
+  let s = '';
+  for (let i = 0; i < len; i++) s += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+  return s;
+}
+
+/** Bring an existing database up to the current schema (add columns / backfill) without data loss. */
+function migrate(db) {
+  const cols = db.prepare('PRAGMA table_info(VotingSession)').all();
+  if (!cols.some((c) => c.name === 'joinCode')) {
+    db.exec('ALTER TABLE VotingSession ADD COLUMN joinCode TEXT');
+  }
+  // Backfill a join code for any session created before this column existed.
+  const missing = db.prepare("SELECT id FROM VotingSession WHERE joinCode IS NULL OR joinCode = ''").all();
+  const setCode = db.prepare('UPDATE VotingSession SET joinCode = ? WHERE id = ?');
+  const exists = db.prepare('SELECT 1 FROM VotingSession WHERE joinCode = ?');
+  for (const row of missing) {
+    let code;
+    do { code = randomCode(); } while (exists.get(code));
+    setCode.run(code, row.id);
+  }
+  // Safe to create now that every row has a joinCode.
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_session_joincode ON VotingSession(joinCode)');
+}
+
 /**
  * Create a database connection and apply the schema.
  * @param {string} filename  Path to the SQLite file, or ':memory:' for an ephemeral DB (used in tests).
@@ -73,5 +100,8 @@ export function createDb(filename = 'voting.db') {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
 }
+
+export { randomCode };

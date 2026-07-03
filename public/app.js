@@ -23,11 +23,29 @@ async function api(path, options) {
   return data;
 }
 
+// Reuse a per-device voter identity for a session so returning to the page keeps the same voter
+// (and therefore the "one vote per presenter" rule). Falls back to minting a new identity via /join.
+async function resolveVoterId(sessionId, displayName) {
+  const key = `voter:${sessionId}`;
+  const cached = localStorage.getItem(key);
+  if (cached) return cached;
+  const voter = await api(`/voting-sessions/${sessionId}/join`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ displayName }),
+  });
+  localStorage.setItem(key, voter.id);
+  return voter.id;
+}
+
 async function loadBallot() {
-  state.sessionId = $('sessionId').value.trim();
-  state.voterId = $('voterId').value.trim();
-  if (!state.sessionId || !state.voterId) return toast('กรอก Session ID และ Voter ID', 'err');
+  const code = $('joinCode').value.trim();
+  const displayName = $('displayName').value.trim();
+  if (!code) return toast('กรอกรหัสเข้าห้อง', 'err');
   try {
+    const session = await api(`/voting-sessions/by-code/${encodeURIComponent(code)}`);
+    state.sessionId = session.sessionId;
+    state.voterId = await resolveVoterId(session.sessionId, displayName);
     state.ballot = await api(`/voting-sessions/${state.sessionId}/ballot?voterId=${encodeURIComponent(state.voterId)}`);
     renderBallot();
   } catch (e) {

@@ -30,13 +30,10 @@ for (let i = 1; i <= 10; i++) {
 
 service.openSession(session.id);
 
-const ballot = service.getBallot(session.id, service._q.participantByCode.get(session.id, 'a1').id);
+const ballot = service.getBallot(session.id, 'seed-preview');
 console.log('Seed complete.');
 console.log('  Session ID:', session.id, '(status: open)');
+console.log('  Join code :', session.joinCode, '  <-- voters enter only this on the voter page');
 console.log('  Categories:', ballot.categories.map((c) => c.name).join(', '));
 console.log('  Presenters:', ballot.presenters.map((p) => p.code).join(', '));
-console.log('\nParticipant IDs (use as voterId):');
-for (const p of ballot.presenters) {
-  console.log(`  ${p.code} -> participantId=${p.participantId}  presenterId=${p.id}`);
-}
 db.close();

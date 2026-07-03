@@ -98,19 +98,94 @@ async function closeSession() {
   catch (e) { toast(e.message, 'err'); }
 }
 
-// Load session status + ballot (any participant works to list presenters/categories).
+// Load session status + join code + editable lists.
 async function refresh() {
   if (!activeId()) return;
   try {
     const session = await api(`/voting-sessions/${activeId()}`);
     $('statusBadge').innerHTML = ` — <span class="pill ${session.status}">${session.status}</span>`;
+    if (session.joinCode) {
+      $('joinCodeBox').classList.remove('hidden');
+      $('joinCodeValue').textContent = session.joinCode;
+    }
 
     // We reuse the ballot endpoint for the setup listing; a dummy voterId just yields alreadyVoted=false.
     const ballot = await api(`/voting-sessions/${activeId()}/ballot?voterId=__admin__`);
-    $('catList').innerHTML = ballot.categories.map((c) => `<li>${c.displayOrder}. ${escapeHtml(c.name)}</li>`).join('') || '<li>ยังไม่มีประเภทคะแนน</li>';
-    $('presenterAdminList').innerHTML = ballot.presenters.map((p) => `<li>${p.code} — ${escapeHtml(p.displayName)} <span class="muted">(${p.participantId})</span></li>`).join('')
-      || '<li>ยังไม่มีผู้นำเสนอ</li>';
+    renderCategoryEditor(ballot.categories);
+    renderPresenterEditor(ballot.presenters);
   } catch (e) { toast(e.message, 'err'); }
+}
+
+function renderCategoryEditor(categories) {
+  const list = $('catList');
+  list.className = 'edit-list';
+  if (!categories.length) { list.innerHTML = '<li class="muted">ยังไม่มีประเภทคะแนน</li>'; return; }
+  list.innerHTML = '';
+  for (const c of categories) {
+    const li = document.createElement('li');
+    li.className = 'edit-row';
+    li.innerHTML = `
+      <input class="order" type="number" value="${c.displayOrder}" title="ลำดับ" />
+      <input class="name" value="${escapeHtml(c.name)}" title="ชื่อประเภท" />
+      <input class="desc" value="${escapeHtml(c.description || '')}" placeholder="คำอธิบาย" />
+      <span class="actions">
+        <button class="small">บันทึก</button>
+        <button class="small ghost">ลบ</button>
+      </span>`;
+    const [orderEl, nameEl, descEl] = li.querySelectorAll('input');
+    const [saveBtn, delBtn] = li.querySelectorAll('button');
+    saveBtn.addEventListener('click', () => saveCategory(c.id, {
+      name: nameEl.value.trim(), description: descEl.value.trim() || null, displayOrder: Number(orderEl.value) || 0,
+    }));
+    delBtn.addEventListener('click', () => deleteCategory(c.id));
+    list.appendChild(li);
+  }
+}
+
+function renderPresenterEditor(presenters) {
+  const list = $('presenterAdminList');
+  list.className = 'edit-list';
+  if (!presenters.length) { list.innerHTML = '<li class="muted">ยังไม่มีผู้นำเสนอ</li>'; return; }
+  list.innerHTML = '';
+  for (const p of presenters) {
+    const li = document.createElement('li');
+    li.className = 'edit-row';
+    li.innerHTML = `
+      <input class="order" type="number" value="${p.presentationOrder}" title="ลำดับนำเสนอ" />
+      <span class="tag">${p.code}</span>
+      <input class="name" value="${escapeHtml(p.displayName)}" title="ชื่อผู้นำเสนอ" />
+      <input class="topic" value="${escapeHtml(p.topicTitle || '')}" placeholder="หัวข้อ" />
+      <span class="actions">
+        <button class="small">บันทึก</button>
+        <button class="small ghost">ลบ</button>
+      </span>`;
+    const [orderEl, nameEl, topicEl] = li.querySelectorAll('input');
+    const [saveBtn, delBtn] = li.querySelectorAll('button');
+    saveBtn.addEventListener('click', () => savePresenter(p.id, {
+      displayName: nameEl.value.trim(), presentationOrder: Number(orderEl.value) || undefined, topicTitle: topicEl.value.trim() || null,
+    }));
+    delBtn.addEventListener('click', () => deletePresenter(p.id));
+    list.appendChild(li);
+  }
+}
+
+const patch = (body) => ({ method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+async function saveCategory(id, body) {
+  try { await api(`/voting-sessions/${activeId()}/categories/${id}`, patch(body)); toast('บันทึกประเภทคะแนนแล้ว'); refresh(); }
+  catch (e) { toast(e.message, 'err'); }
+}
+async function deleteCategory(id) {
+  try { await api(`/voting-sessions/${activeId()}/categories/${id}`, { method: 'DELETE' }); toast('ลบประเภทคะแนนแล้ว'); refresh(); }
+  catch (e) { toast(e.message, 'err'); }
+}
+async function savePresenter(id, body) {
+  try { await api(`/voting-sessions/${activeId()}/presenters/${id}`, patch(body)); toast('บันทึกผู้นำเสนอแล้ว'); refresh(); }
+  catch (e) { toast(e.message, 'err'); }
+}
+async function deletePresenter(id) {
+  try { await api(`/voting-sessions/${activeId()}/presenters/${id}`, { method: 'DELETE' }); toast('ลบผู้นำเสนอแล้ว'); refresh(); }
+  catch (e) { toast(e.message, 'err'); }
 }
 
 async function loadResults() {
@@ -140,3 +215,8 @@ $('addPresenterBtn').addEventListener('click', addPresenter);
 $('openBtn').addEventListener('click', openSession);
 $('closeBtn').addEventListener('click', closeSession);
 $('resultsBtn').addEventListener('click', loadResults);
+$('copyCodeBtn').addEventListener('click', async () => {
+  const code = $('joinCodeValue').textContent.trim();
+  try { await navigator.clipboard.writeText(code); toast(`คัดลอกโค้ด ${code} แล้ว`); }
+  catch { toast('คัดลอกไม่สำเร็จ', 'err'); }
+});

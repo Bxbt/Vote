@@ -18,18 +18,18 @@
   <div class="wrap">
     <div class="card" id="loginCard">
       <h2>เข้าสู่การโหวต</h2>
-      <p class="muted">กรอก Session ID และ Voter (participant) ID ที่ได้จากผู้ดูแล แล้วกดโหลด ballot</p>
+      <p class="muted">กรอกรหัสเข้าห้อง (session code) ที่ผู้ดูแลแจกให้ แล้วกดเข้าห้อง — ระบบจะจำตัวคุณบนอุปกรณ์นี้เอง</p>
       <div class="row">
         <div>
-          <label>Session ID</label>
-          <input id="sessionId" placeholder="session-xxxxxxxx" />
+          <label>รหัสเข้าห้อง (session code)</label>
+          <input id="joinCode" placeholder="เช่น 7A3K9Q" autocomplete="off" autocapitalize="characters" />
         </div>
         <div>
-          <label>Voter ID (participantId)</label>
-          <input id="voterId" placeholder="participant-xxxxxxxx" />
+          <label>ชื่อของคุณ (ไม่บังคับ)</label>
+          <input id="displayName" placeholder="เช่น สมชาย" autocomplete="off" />
         </div>
       </div>
-      <div class="mt"><button class="primary" id="loadBtn">โหลด Ballot</button></div>
+      <div class="mt"><button class="primary" id="loadBtn">เข้าห้องโหวต</button></div>
     </div>
 
     <div class="card hidden" id="ballotCard">

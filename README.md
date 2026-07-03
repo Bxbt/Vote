@@ -1,14 +1,18 @@
 # System Design Voting
 
-ระบบโหวตคะแนนงานออกแบบระบบ (System Design) สำหรับกิจกรรมที่มีผู้นำเสนอ 10 คน
+ระบบโหวตคะแนนงานออกแบบระบบ (System Design) สำหรับกิจกรรมที่มีผู้นำเสนอหลายคน
 สร้างตามเอกสาร BR / FR / SRS / DB Design / API Spec / Test Cases ใน `Vote.html`
 
 ## คุณสมบัติ
 - รอบโหวต (VotingSession) มีสถานะ `draft` → `open` → `closed`
 - ประเภทคะแนนที่ตั้งค่าได้ (Wow Factor, Creativity, Technical Depth, Practicality, Presentation Clarity …)
 - ให้คะแนน **1–5 ดาว** ต่อประเภท
+- **ผู้นำเสนอเพิ่มได้ไม่จำกัด** (อย่างน้อย 1 คนก็เปิดโหวตได้)
+- **ผู้โหวตเข้าร่วมด้วย session code อย่างเดียว** — ระบบสร้าง identity ต่ออุปกรณ์และจำใน `localStorage`
+  (เหมาะกับผู้ชม walk-in จำนวนมาก เช่น 30–50 คน โดยไม่ต้องลงทะเบียนล่วงหน้า)
 - ผู้โหวตให้คะแนนผู้นำเสนอได้ทุกคน **รวมถึงตัวเอง** แต่โหวตคนเดิมซ้ำไม่ได้
   (unique constraint ที่ `sessionId, voterId, presenterId`)
+- **แก้ไข/ลบ ประเภทคะแนนและผู้นำเสนอได้** ภายหลัง (ลบไม่ได้ถ้ามีโหวตอ้างอิงแล้ว)
 - ตรวจสอบฝั่ง server เสมอ: session เปิดอยู่, presenter อยู่ในรอบ, คะแนนครบทุกประเภทและอยู่ในช่วง 1–5
 - สรุปผล: คะแนนเฉลี่ยรายประเภท, คะแนนเฉลี่ยรวม, จำนวนโหวต และอันดับ (รองรับ tie)
 
@@ -28,25 +32,33 @@ npm start             # เปิดเซิร์ฟเวอร์ที่ h
 
 ### วิธีใช้แบบเร็ว
 1. เปิด Admin UI → กด **Seed ตัวอย่าง** (สร้าง 5 หมวด + a1..a10 และเปิดโหวตให้เลย)
-   *(หรือกดสร้างเอง: สร้าง session → เพิ่มหมวด → เพิ่มผู้นำเสนอครบ 10 → กดเปิดรอบโหวต)*
-2. กด **โหลดข้อมูล session** เพื่อดู `Session ID` และ `participantId` ของแต่ละ presenter
-3. เปิด Voter UI → กรอก `Session ID` + `Voter ID` (participantId เช่นของ a1) → โหลด ballot → ให้ดาวแล้วส่ง
+   *(หรือกดสร้างเอง: สร้าง session → เพิ่มหมวด → เพิ่มผู้นำเสนอ (กี่คนก็ได้) → กดเปิดรอบโหวต)*
+2. กด **โหลดข้อมูล session** → จะเห็น **รหัสเข้าห้อง (join code)** ตัวใหญ่ ให้แชร์โค้ดนี้กับผู้โหวต
+   *(ในหน้านี้ยังแก้ชื่อ/ลำดับ/ลบ ประเภทคะแนนและผู้นำเสนอได้)*
+3. เปิด Voter UI → ผู้โหวต **กรอกแค่ join code** (+ ชื่อไม่บังคับ) → เข้าห้อง → ให้ดาวแล้วส่ง
 4. กลับมา Admin UI → **โหลดผลคะแนน** เพื่อดูค่าเฉลี่ยและอันดับ
 
-## API (ตาม spec)
+## API
 | Method | Path | หน้าที่ |
 | --- | --- | --- |
-| POST | `/voting-sessions` | สร้างรอบโหวต (status = draft) |
+| POST | `/voting-sessions` | สร้างรอบโหวต (status = draft, ได้ `joinCode` มาด้วย) |
 | POST | `/voting-sessions/{id}/categories` | เพิ่มประเภทคะแนน |
-| POST | `/voting-sessions/{id}/presenters` | เพิ่มผู้นำเสนอ (สูงสุด 10 คน) |
-| POST | `/voting-sessions/{id}/voters` | เพิ่มผู้โหวตที่ไม่ใช่ presenter (ส่วนเสริม) |
-| POST | `/voting-sessions/{id}/open` | เปิดรอบโหวต (ต้องมี ≥1 หมวด และ 10 presenters) |
+| PATCH | `/voting-sessions/{id}/categories/{catId}` | แก้ไขประเภทคะแนน (ชื่อ/คำอธิบาย/ลำดับ/isActive) |
+| DELETE | `/voting-sessions/{id}/categories/{catId}` | ลบประเภทคะแนน (บล็อกถ้ามีคะแนนแล้ว) |
+| POST | `/voting-sessions/{id}/presenters` | เพิ่มผู้นำเสนอ (ไม่จำกัดจำนวน) |
+| PATCH | `/voting-sessions/{id}/presenters/{presenterId}` | แก้ไขผู้นำเสนอ (ชื่อ/ลำดับ/หัวข้อ) |
+| DELETE | `/voting-sessions/{id}/presenters/{presenterId}` | ลบผู้นำเสนอ (บล็อกถ้ามีโหวตแล้ว) |
+| GET  | `/voting-sessions/by-code/{code}` | resolve join code → session |
+| POST | `/voting-sessions/{id}/join` | ผู้โหวต self-register (คืน `voterId` สำหรับจำในอุปกรณ์) |
+| POST | `/voting-sessions/{id}/open` | เปิดรอบโหวต (ต้องมี ≥1 หมวด และ ≥1 presenter) |
 | GET  | `/voting-sessions/{id}/ballot?voterId=` | ดึง ballot + สถานะ voted/not voted |
 | POST | `/voting-sessions/{id}/votes` | ส่งคะแนน 1 ชุด |
 | GET  | `/voting-sessions/{id}/results` | ผลคะแนน + อันดับ |
 | POST | `/voting-sessions/{id}/close` | ปิดรอบโหวต |
 
-รหัสข้อผิดพลาดหลัก: `409` โหวตซ้ำ, `403` รอบโหวตไม่เปิด, `400` คะแนนไม่ครบ/นอกช่วง หรือ presenter ไม่อยู่ในรอบ
+รหัสข้อผิดพลาดหลัก: `409` โหวตซ้ำ / ลบของที่มีข้อมูลอ้างอิง, `403` รอบโหวตไม่เปิด, `400` คะแนนไม่ครบ/นอกช่วง หรือ presenter ไม่อยู่ในรอบ
+
+> หมายเหตุ identity: กติกา "1 โหวต/ผู้นำเสนอ" บังคับต่อ **อุปกรณ์** (จำ `voterId` ใน `localStorage`) — เคลียร์ cache หรือเปลี่ยนเบราว์เซอร์จะได้ identity ใหม่
 
 ## โครงสร้าง
 ```
@@ -58,4 +70,22 @@ src/
 public/         Voter UI + Admin UI
 test/           voting.test.js — TC-1..TC-14
 ```
-# Vote
+
+## Deploy (Docker / Portainer + Cloudflare Tunnel)
+
+Deploy เป็น **Git stack** บน Portainer (host clone repo แล้ว build image ให้เอง) และเปิดเว็บที่
+`vote.bboybezz.xyz` ผ่าน **Cloudflare Tunnel**
+
+ไฟล์ที่เกี่ยวข้อง: `Dockerfile` (multi-stage, non-root, healthcheck), `docker-compose.yml`, `.dockerignore`
+ฐานข้อมูล SQLite เก็บใน named volume `vote-data` ที่ `/data` (คงอยู่ข้ามการ redeploy)
+
+### ขั้นตอน
+1. **Portainer → Stacks → Add stack → Git repository**
+   - Repository URL: `https://github.com/Bxbt/Vote`
+   - Compose path: `docker-compose.yml`
+   - Deploy — Portainer จะ build image และรัน container ชื่อ `vote` เปิดพอร์ต host `8080` (ปรับได้ด้วย env `VOTE_PORT`)
+2. **Cloudflare Tunnel**: เพิ่ม public hostname
+   - Subdomain `vote` → domain `bboybezz.xyz`
+   - Service: `http://<host>:8080` (หรือ `http://vote:3000` ถ้า cloudflared อยู่ Docker network เดียวกัน)
+
+ตัวแปรที่ปรับได้: `VOTE_PORT` (host port, default 8080), `VOTE_IMAGE` (ถ้าใช้ image จาก registry แทนการ build)

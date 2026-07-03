@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-
-export const PRESENTERS_PER_SESSION = 10;
+import { randomCode } from './db.js';
 
 /** An error that carries an HTTP status code so the API layer can translate it into a response. */
 export class ApiError extends Error {
@@ -21,20 +20,29 @@ const id = (prefix) => `${prefix}-${randomUUID().slice(0, 8)}`;
 export function createService(db) {
   const q = {
     session:       db.prepare('SELECT * FROM VotingSession WHERE id = ?'),
-    insertSession: db.prepare('INSERT INTO VotingSession (id, name, eventDate, status, createdAt, updatedAt) VALUES (@id, @name, @eventDate, @status, @createdAt, @updatedAt)'),
+    sessionByCode: db.prepare('SELECT * FROM VotingSession WHERE joinCode = ?'),
+    insertSession: db.prepare('INSERT INTO VotingSession (id, name, eventDate, status, joinCode, createdAt, updatedAt) VALUES (@id, @name, @eventDate, @status, @joinCode, @createdAt, @updatedAt)'),
     setStatus:     db.prepare('UPDATE VotingSession SET status = ?, updatedAt = ? WHERE id = ?'),
 
     activeCategories: db.prepare('SELECT * FROM ScoreCategory WHERE sessionId = ? AND isActive = 1 ORDER BY displayOrder, name'),
+    categoryById:     db.prepare('SELECT * FROM ScoreCategory WHERE id = ?'),
     insertCategory:   db.prepare('INSERT INTO ScoreCategory (id, sessionId, name, description, displayOrder, isActive) VALUES (@id, @sessionId, @name, @description, @displayOrder, 1)'),
+    updateCategory:   db.prepare('UPDATE ScoreCategory SET name = @name, description = @description, displayOrder = @displayOrder, isActive = @isActive WHERE id = @id'),
+    deleteCategory:   db.prepare('DELETE FROM ScoreCategory WHERE id = ?'),
+    scoresForCategory: db.prepare('SELECT COUNT(*) AS n FROM VoteScore WHERE categoryId = ?'),
 
     participantByCode: db.prepare('SELECT * FROM Participant WHERE sessionId = ? AND code = ?'),
     participantById:   db.prepare('SELECT * FROM Participant WHERE id = ?'),
     insertParticipant: db.prepare('INSERT INTO Participant (id, sessionId, code, displayName, role, createdAt) VALUES (@id, @sessionId, @code, @displayName, @role, @createdAt)'),
+    updateParticipantName: db.prepare('UPDATE Participant SET displayName = ? WHERE id = ?'),
 
     presenters:       db.prepare('SELECT * FROM Presenter WHERE sessionId = ? ORDER BY presentationOrder'),
     presenterById:    db.prepare('SELECT * FROM Presenter WHERE id = ?'),
     presenterCount:   db.prepare('SELECT COUNT(*) AS n FROM Presenter WHERE sessionId = ?'),
     insertPresenter:  db.prepare('INSERT INTO Presenter (id, sessionId, participantId, presentationOrder, topicTitle) VALUES (@id, @sessionId, @participantId, @presentationOrder, @topicTitle)'),
+    updatePresenter:  db.prepare('UPDATE Presenter SET presentationOrder = @presentationOrder, topicTitle = @topicTitle WHERE id = @id'),
+    deletePresenter:  db.prepare('DELETE FROM Presenter WHERE id = ?'),
+    votesForPresenter: db.prepare('SELECT COUNT(*) AS n FROM Vote WHERE presenterId = ?'),
 
     votedPresenterIds: db.prepare('SELECT presenterId FROM Vote WHERE sessionId = ? AND voterId = ?'),
     findVote:          db.prepare('SELECT * FROM Vote WHERE sessionId = ? AND voterId = ? AND presenterId = ?'),
@@ -62,8 +70,17 @@ export function createService(db) {
 
   function createSession({ name, eventDate = null }) {
     if (!name || !name.trim()) throw new ApiError(400, 'Session name is required');
-    const session = { id: id('session'), name: name.trim(), eventDate, status: 'draft', createdAt: now(), updatedAt: now() };
+    let joinCode;
+    do { joinCode = randomCode(); } while (q.sessionByCode.get(joinCode));
+    const session = { id: id('session'), name: name.trim(), eventDate, status: 'draft', joinCode, createdAt: now(), updatedAt: now() };
     q.insertSession.run(session);
+    return session;
+  }
+
+  /** Resolve a short human-friendly join code to its session (used by the voter page). */
+  function getSessionByCode(code) {
+    const session = q.sessionByCode.get(String(code || '').trim().toUpperCase());
+    if (!session) throw new ApiError(404, 'Session code not found');
     return session;
   }
 
@@ -76,14 +93,38 @@ export function createService(db) {
     return { ...category, isActive: 1 };
   }
 
+  function editCategory(sessionId, categoryId, { name, description, displayOrder, isActive }) {
+    const session = getSessionOrThrow(sessionId);
+    if (session.status === 'closed') throw new ApiError(400, 'Cannot modify a closed session');
+    const existing = q.categoryById.get(categoryId);
+    if (!existing || existing.sessionId !== sessionId) throw new ApiError(404, 'Category not found');
+    const updated = {
+      id: categoryId,
+      name: name != null && name.trim() ? name.trim() : existing.name,
+      description: description !== undefined ? description : existing.description,
+      displayOrder: displayOrder != null ? displayOrder : existing.displayOrder,
+      isActive: isActive != null ? (isActive ? 1 : 0) : existing.isActive,
+    };
+    q.updateCategory.run(updated);
+    return updated;
+  }
+
+  function removeCategory(sessionId, categoryId) {
+    const session = getSessionOrThrow(sessionId);
+    if (session.status === 'closed') throw new ApiError(400, 'Cannot modify a closed session');
+    const existing = q.categoryById.get(categoryId);
+    if (!existing || existing.sessionId !== sessionId) throw new ApiError(404, 'Category not found');
+    if (q.scoresForCategory.get(categoryId).n > 0) {
+      throw new ApiError(409, 'Cannot delete a category that already has votes; deactivate it instead');
+    }
+    q.deleteCategory.run(categoryId);
+    return { ok: true };
+  }
+
   function addPresenter(sessionId, { participantCode, displayName, presentationOrder, topicTitle = null }) {
     const session = getSessionOrThrow(sessionId);
     if (session.status === 'closed') throw new ApiError(400, 'Cannot modify a closed session');
     if (!participantCode || !displayName) throw new ApiError(400, 'participantCode and displayName are required');
-
-    if (q.presenterCount.get(sessionId).n >= PRESENTERS_PER_SESSION) {
-      throw new ApiError(400, `Voting session can contain only ${PRESENTERS_PER_SESSION} presenters for this event`);
-    }
 
     // Reuse the participant if their code already exists in this session, otherwise create one.
     let participant = q.participantByCode.get(sessionId, participantCode);
@@ -108,6 +149,35 @@ export function createService(db) {
     return { ...presenter, participantId: participant.id };
   }
 
+  function editPresenter(sessionId, presenterId, { displayName, presentationOrder, topicTitle }) {
+    const session = getSessionOrThrow(sessionId);
+    if (session.status === 'closed') throw new ApiError(400, 'Cannot modify a closed session');
+    const presenter = q.presenterById.get(presenterId);
+    if (!presenter || presenter.sessionId !== sessionId) throw new ApiError(404, 'Presenter not found');
+    q.updatePresenter.run({
+      id: presenterId,
+      presentationOrder: presentationOrder != null ? presentationOrder : presenter.presentationOrder,
+      topicTitle: topicTitle !== undefined ? topicTitle : presenter.topicTitle,
+    });
+    if (displayName != null && displayName.trim()) {
+      q.updateParticipantName.run(displayName.trim(), presenter.participantId);
+    }
+    const participant = q.participantById.get(presenter.participantId);
+    return { id: presenterId, sessionId, participantId: presenter.participantId, code: participant.code, displayName: participant.displayName, presentationOrder: presentationOrder ?? presenter.presentationOrder, topicTitle: topicTitle ?? presenter.topicTitle };
+  }
+
+  function removePresenter(sessionId, presenterId) {
+    const session = getSessionOrThrow(sessionId);
+    if (session.status === 'closed') throw new ApiError(400, 'Cannot modify a closed session');
+    const presenter = q.presenterById.get(presenterId);
+    if (!presenter || presenter.sessionId !== sessionId) throw new ApiError(404, 'Presenter not found');
+    if (q.votesForPresenter.get(presenterId).n > 0) {
+      throw new ApiError(409, 'Cannot delete a presenter who already has votes');
+    }
+    q.deletePresenter.run(presenterId);
+    return { ok: true };
+  }
+
   /** Register a plain voter (no presentation) so people who are not presenters can still cast votes. */
   function addVoter(sessionId, { code, displayName }) {
     getSessionOrThrow(sessionId);
@@ -119,12 +189,32 @@ export function createService(db) {
     return participant;
   }
 
+  /**
+   * Self-service voter join used by the public voter page: the browser presents only a session code,
+   * so we mint an anonymous voter participant and hand back its id (the browser then remembers it).
+   */
+  function joinAsVoter(sessionId, { displayName = null } = {}) {
+    getSessionOrThrow(sessionId);
+    let code;
+    do { code = 'v-' + randomUUID().slice(0, 8); } while (q.participantByCode.get(sessionId, code));
+    const participant = {
+      id: id('participant'),
+      sessionId,
+      code,
+      displayName: (displayName && displayName.trim()) || 'Guest voter',
+      role: 'voter',
+      createdAt: now(),
+    };
+    q.insertParticipant.run(participant);
+    return participant;
+  }
+
   function openSession(sessionId) {
     const session = getSessionOrThrow(sessionId);
     const categories = q.activeCategories.all(sessionId);
     const presenterCount = q.presenterCount.get(sessionId).n;
-    if (categories.length < 1 || presenterCount < PRESENTERS_PER_SESSION) {
-      throw new ApiError(400, `At least one score category and ${PRESENTERS_PER_SESSION} presenters are required before opening voting`);
+    if (categories.length < 1 || presenterCount < 1) {
+      throw new ApiError(400, 'At least one score category and one presenter are required before opening voting');
     }
     q.setStatus.run('open', now(), sessionId);
     return { ...session, status: 'open' };
@@ -260,8 +350,9 @@ export function createService(db) {
   }
 
   return {
-    createSession, addCategory, addPresenter, addVoter, openSession, closeSession,
-    getBallot, submitVote, getResults, getSessionOrThrow,
+    createSession, getSessionByCode, addCategory, editCategory, removeCategory,
+    addPresenter, editPresenter, removePresenter, addVoter, joinAsVoter,
+    openSession, closeSession, getBallot, submitVote, getResults, getSessionOrThrow,
     _q: q,
   };
 }
