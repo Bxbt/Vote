@@ -34,6 +34,10 @@ export function createApp(service) {
     return service.createSession(req.body ?? {});
   }));
 
+  app.get('/voting-sessions', h(() => service.listSessions()));
+
+  app.delete('/voting-sessions/:sessionId', h((req) => service.deleteSession(req.params.sessionId)));
+
   app.post('/voting-sessions/:sessionId/categories', h((req, res) => {
     res.status(201);
     return service.addCategory(req.params.sessionId, req.body ?? {});

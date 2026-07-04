@@ -108,6 +108,17 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .edit-row input { flex: 1; min-width: 90px; padding: 6px 9px; }
 .edit-row input.order { flex: none; width: 64px; }
 .edit-row .actions { display: flex; gap: 6px; }
+.sessions-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.accordion-toggle {
+  background: none; border: 0; padding: 4px 0; margin: 0; cursor: pointer;
+  font-size: 14px; font-weight: 600; color: var(--ink); display: inline-flex; align-items: center; gap: 6px;
+}
+.accordion-toggle .caret { font-size: 11px; color: var(--muted); }
+.accordion-toggle:hover { color: var(--brand); }
+.session-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.session-meta .muted { font-size: 12px; }
+button.danger { color: #b91c1c; border-color: #fecaca; }
+button.danger:hover { background: #fef2f2; }
 
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }

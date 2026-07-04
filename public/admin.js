@@ -27,6 +27,7 @@ async function createSession() {
     $('activeSessionId').value = s.id;
     toast(`สร้างรอบโหวตแล้ว: ${s.id}`);
     refresh();
+    loadSessionList();
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -38,21 +39,71 @@ async function seedSample() {
       id = s.id;
       $('activeSessionId').value = id;
     }
+    // Score categories mirror session-985a2812 — presenters are added manually afterwards.
     const cats = [
-      ['Wow Factor', 'ความน่าประทับใจและความโดดเด่นของแนวคิด'],
-      ['Creativity', 'ความคิดสร้างสรรค์ของการออกแบบ'],
-      ['Technical Depth', 'ความลึกและความถูกต้องเชิงเทคนิค'],
-      ['Practicality', 'นำไปใช้งานได้จริงเพียงใด'],
-      ['Presentation Clarity', 'ความชัดเจนในการนำเสนอ'],
+      ['🤯 Wow Factor', 'ความน่าประทับใจและความโดดเด่นของแนวคิด', 1],
+      ['💡 Creativity', 'ความคิดสร้างสรรค์ของการออกแบบ', 2],
+      ['🛠️ Practicality', 'นำไปใช้งานได้จริงเพียงใด', 4],
+      ['🎤 Presentation', 'เล่าได้น่าสนใจแค่ไหน', 5],
     ];
-    for (let i = 0; i < cats.length; i++) {
-      await api(`/voting-sessions/${id}/categories`, json({ name: cats[i][0], description: cats[i][1], displayOrder: i + 1 }));
+    for (const [name, description, displayOrder] of cats) {
+      await api(`/voting-sessions/${id}/categories`, json({ name, description, displayOrder }));
     }
-    for (let i = 1; i <= 10; i++) {
-      await api(`/voting-sessions/${id}/presenters`, json({ participantCode: `a${i}`, displayName: `Presenter A${i}`, presentationOrder: i, topicTitle: `System Design Topic ${i}` }));
-    }
-    toast('Seed สำเร็จ (5 หมวด + a1..a10)');
+    toast('Seed หมวดคะแนนสำเร็จ (4 หมวด — เพิ่มผู้นำเสนอเอง)');
     refresh();
+    loadSessionList();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+function toggleSessions() {
+  const btn = $('toggleSessionsBtn');
+  const open = btn.getAttribute('aria-expanded') !== 'true';
+  btn.setAttribute('aria-expanded', String(open));
+  btn.querySelector('.caret').textContent = open ? '▼' : '▶';
+  $('sessionList').classList.toggle('hidden', !open);
+  $('listSessionsBtn').classList.toggle('hidden', !open);
+  if (open) loadSessionList();
+}
+
+async function loadSessionList() {
+  try {
+    const sessions = await api('/voting-sessions');
+    $('sessionCount').textContent = `(${sessions.length})`;
+    const list = $('sessionList');
+    if (!sessions.length) { list.innerHTML = '<li class="muted">ยังไม่มี session</li>'; return; }
+    list.innerHTML = '';
+    for (const s of sessions) {
+      const li = document.createElement('li');
+      li.className = 'edit-row';
+      li.innerHTML = `
+        <span class="pill ${s.status}">${s.status}</span>
+        <span class="session-meta">
+          <strong>${escapeHtml(s.name)}</strong>
+          <span class="muted">· ${s.joinCode || '—'} · ${s.categories} หมวด · ${s.presenters} คน · ${s.votes} โหวต</span>
+        </span>
+        <span class="actions">
+          <button class="small" data-act="load">โหลด</button>
+          <button class="small ghost danger" data-act="del">ลบ</button>
+        </span>`;
+      li.querySelector('[data-act="load"]').addEventListener('click', () => {
+        $('activeSessionId').value = s.id;
+        refresh();
+        toast(`โหลด session: ${s.name}`);
+      });
+      li.querySelector('[data-act="del"]').addEventListener('click', () => deleteSession(s));
+      list.appendChild(li);
+    }
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function deleteSession(s) {
+  const detail = s.votes > 0 ? `\n\n⚠️ มีโหวต ${s.votes} รายการ จะถูกลบไปด้วย` : '';
+  if (!confirm(`ลบ session "${s.name}" (${s.id}) ถาวร?${detail}`)) return;
+  try {
+    await api(`/voting-sessions/${s.id}`, { method: 'DELETE' });
+    if (activeId() === s.id) $('activeSessionId').value = '';
+    toast('ลบ session แล้ว');
+    loadSessionList();
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -210,6 +261,9 @@ async function loadResults() {
 
 $('createSessionBtn').addEventListener('click', createSession);
 $('seedBtn').addEventListener('click', seedSample);
+$('listSessionsBtn').addEventListener('click', loadSessionList);
+$('toggleSessionsBtn').addEventListener('click', toggleSessions);
+loadSessionList(); // populate the count on load; the list itself stays collapsed
 $('refreshBtn').addEventListener('click', refresh);
 $('addCatBtn').addEventListener('click', addCategory);
 $('addPresenterBtn').addEventListener('click', addPresenter);

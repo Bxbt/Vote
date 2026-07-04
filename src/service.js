@@ -21,6 +21,18 @@ export function createService(db) {
   const q = {
     session:       db.prepare('SELECT * FROM VotingSession WHERE id = ?'),
     sessionByCode: db.prepare('SELECT * FROM VotingSession WHERE joinCode = ?'),
+    listSessions:  db.prepare(`
+      SELECT s.id, s.name, s.status, s.joinCode, s.eventDate, s.createdAt,
+        (SELECT COUNT(*) FROM ScoreCategory c WHERE c.sessionId = s.id) AS categories,
+        (SELECT COUNT(*) FROM Presenter p WHERE p.sessionId = s.id) AS presenters,
+        (SELECT COUNT(*) FROM Vote v WHERE v.sessionId = s.id) AS votes
+      FROM VotingSession s ORDER BY s.createdAt DESC`),
+    delScores:      db.prepare('DELETE FROM VoteScore WHERE voteId IN (SELECT id FROM Vote WHERE sessionId = ?)'),
+    delVotes:       db.prepare('DELETE FROM Vote WHERE sessionId = ?'),
+    delPresenters:  db.prepare('DELETE FROM Presenter WHERE sessionId = ?'),
+    delCategories:  db.prepare('DELETE FROM ScoreCategory WHERE sessionId = ?'),
+    delParticipants:db.prepare('DELETE FROM Participant WHERE sessionId = ?'),
+    delSession:     db.prepare('DELETE FROM VotingSession WHERE id = ?'),
     insertSession: db.prepare('INSERT INTO VotingSession (id, name, eventDate, status, joinCode, createdAt, updatedAt) VALUES (@id, @name, @eventDate, @status, @joinCode, @createdAt, @updatedAt)'),
     setStatus:     db.prepare('UPDATE VotingSession SET status = ?, updatedAt = ? WHERE id = ?'),
 
@@ -75,6 +87,26 @@ export function createService(db) {
     const session = { id: id('session'), name: name.trim(), eventDate, status: 'draft', joinCode, createdAt: now(), updatedAt: now() };
     q.insertSession.run(session);
     return session;
+  }
+
+  /** List every session (most recent first) with quick counts for the admin session picker. */
+  function listSessions() {
+    return q.listSessions.all();
+  }
+
+  /** Permanently delete a session and everything under it (votes, scores, presenters, categories, participants). */
+  function deleteSession(sessionId) {
+    getSessionOrThrow(sessionId);
+    const wipe = db.transaction(() => {
+      q.delScores.run(sessionId);
+      q.delVotes.run(sessionId);
+      q.delPresenters.run(sessionId);
+      q.delCategories.run(sessionId);
+      q.delParticipants.run(sessionId);
+      q.delSession.run(sessionId);
+    });
+    wipe();
+    return { ok: true };
   }
 
   /** Resolve a short human-friendly join code to its session (used by the voter page). */
@@ -350,7 +382,7 @@ export function createService(db) {
   }
 
   return {
-    createSession, getSessionByCode, addCategory, editCategory, removeCategory,
+    createSession, listSessions, deleteSession, getSessionByCode, addCategory, editCategory, removeCategory,
     addPresenter, editPresenter, removePresenter, addVoter, joinAsVoter,
     openSession, closeSession, getBallot, submitVote, getResults, getSessionOrThrow,
     _q: q,

@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
   <link rel="icon" type="image/png" sizes="64x64" href="favicon.png" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
-  <link rel="stylesheet" href="styles.css?v=2" />
+  <link rel="stylesheet" href="styles.css?v=4" />
 </head>
 <body>
   <div class="wrap">
@@ -25,13 +25,23 @@
       </div>
       <div class="mt row">
         <button class="primary" id="createSessionBtn">สร้างรอบโหวต</button>
-        <button class="ghost" id="seedBtn">Seed ตัวอย่าง (5 หมวด + a1..a10)</button>
+        <button class="ghost" id="seedBtn">Seed หมวดคะแนน (4 หมวด)</button>
       </div>
       <div class="mt">
         <label>Session ID ที่กำลังจัดการ</label>
         <input id="activeSessionId" placeholder="session-xxxxxxxx" />
         <div class="mt"><button class="ghost small" id="refreshBtn">โหลดข้อมูล session</button>
           <span id="statusBadge" class="muted"></span></div>
+      </div>
+
+      <div class="mt">
+        <div class="sessions-head">
+          <button class="accordion-toggle" id="toggleSessionsBtn" aria-expanded="false">
+            <span class="caret">▶</span> รายการ session ทั้งหมด <span id="sessionCount" class="muted"></span>
+          </button>
+          <button class="ghost small hidden" id="listSessionsBtn">รีเฟรช</button>
+        </div>
+        <ul id="sessionList" class="edit-list hidden"></ul>
       </div>
       <div class="joincode-box hidden" id="joinCodeBox">
         <div>
@@ -86,6 +96,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="admin.js?v=2"></script>
+  <script src="admin.js?v=4"></script>
 </body>
 </html>
