@@ -177,7 +177,7 @@ function renderCategoryEditor(categories) {
     const li = document.createElement('li');
     li.className = 'edit-row';
     li.innerHTML = `
-      <input class="order" type="number" value="${c.displayOrder}" title="ลำดับ" />
+      <input class="order" type="number" value="${escapeHtml(c.displayOrder)}" title="ลำดับ" />
       <input class="name" value="${escapeHtml(c.name)}" title="ชื่อประเภท" />
       <input class="desc" value="${escapeHtml(c.description || '')}" placeholder="คำอธิบาย" />
       <span class="actions">
@@ -203,8 +203,8 @@ function renderPresenterEditor(presenters) {
     const li = document.createElement('li');
     li.className = 'edit-row';
     li.innerHTML = `
-      <input class="order" type="number" value="${p.presentationOrder}" title="ลำดับนำเสนอ" />
-      <span class="tag">${p.code}</span>
+      <input class="order" type="number" value="${escapeHtml(p.presentationOrder)}" title="ลำดับนำเสนอ" />
+      <span class="tag">${escapeHtml(p.code)}</span>
       <input class="name" value="${escapeHtml(p.displayName)}" title="ชื่อผู้นำเสนอ" />
       <input class="topic" value="${escapeHtml(p.topicTitle || '')}" placeholder="หัวข้อ" />
       <span class="actions">

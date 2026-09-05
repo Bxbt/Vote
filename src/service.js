@@ -13,6 +13,27 @@ export class ApiError extends Error {
 const now = () => new Date().toISOString();
 const id = (prefix) => `${prefix}-${randomUUID().slice(0, 8)}`;
 
+// --- input hardening (SEC-13) ---------------------------------------------
+// ปิดสองอย่าง: ข้อความยาวไม่จำกัดจนกินดิสก์ และค่าที่ควรเป็นตัวเลขแต่ส่ง string มาได้
+const MAX_LEN = { name: 200, description: 500, topicTitle: 300, code: 64, displayName: 200 };
+
+/** ตัดช่องว่างหัวท้าย + ปฏิเสธถ้ายาวเกินกำหนด (null/undefined ปล่อยผ่าน) */
+function text(value, field) {
+  if (value == null) return value;
+  const s = String(value).trim();
+  const max = MAX_LEN[field] ?? 200;
+  if (s.length > max) throw new ApiError(400, `${field} ยาวเกิน ${max} ตัวอักษร`);
+  return s;
+}
+
+/** บังคับเป็นจำนวนเต็ม ถ้าแปลงไม่ได้ใช้ค่าสำรอง — กันไม่ให้ string หลุดลงคอลัมน์ INTEGER */
+function int(value, fallback) {
+  if (value == null || value === '') return fallback;
+  const n = Number(value);
+  if (!Number.isFinite(n)) throw new ApiError(400, 'ต้องเป็นตัวเลข');
+  return Math.trunc(n);
+}
+
 /**
  * Build the voting service bound to a database connection.
  * All business rules (FR-1..FR-14) live here so they are enforced regardless of the caller (API or UI).
@@ -84,7 +105,7 @@ export function createService(db) {
     if (!name || !name.trim()) throw new ApiError(400, 'Session name is required');
     let joinCode;
     do { joinCode = randomCode(); } while (q.sessionByCode.get(joinCode));
-    const session = { id: id('session'), name: name.trim(), eventDate, status: 'draft', joinCode, createdAt: now(), updatedAt: now() };
+    const session = { id: id('session'), name: text(name, 'name'), eventDate: text(eventDate, 'name'), status: 'draft', joinCode, createdAt: now(), updatedAt: now() };
     q.insertSession.run(session);
     return session;
   }
@@ -120,7 +141,7 @@ export function createService(db) {
     const session = getSessionOrThrow(sessionId);
     if (session.status === 'closed') throw new ApiError(400, 'Cannot modify a closed session');
     if (!name || !name.trim()) throw new ApiError(400, 'Category name is required');
-    const category = { id: id('category'), sessionId, name: name.trim(), description, displayOrder };
+    const category = { id: id('category'), sessionId, name: text(name, 'name'), description: text(description, 'description'), displayOrder: int(displayOrder, 0) };
     q.insertCategory.run(category);
     return { ...category, isActive: 1 };
   }
@@ -132,9 +153,9 @@ export function createService(db) {
     if (!existing || existing.sessionId !== sessionId) throw new ApiError(404, 'Category not found');
     const updated = {
       id: categoryId,
-      name: name != null && name.trim() ? name.trim() : existing.name,
-      description: description !== undefined ? description : existing.description,
-      displayOrder: displayOrder != null ? displayOrder : existing.displayOrder,
+      name: name != null && String(name).trim() ? text(name, 'name') : existing.name,
+      description: description !== undefined ? text(description, 'description') : existing.description,
+      displayOrder: displayOrder != null ? int(displayOrder, existing.displayOrder) : existing.displayOrder,
       isActive: isActive != null ? (isActive ? 1 : 0) : existing.isActive,
     };
     q.updateCategory.run(updated);
@@ -161,7 +182,7 @@ export function createService(db) {
     // Reuse the participant if their code already exists in this session, otherwise create one.
     let participant = q.participantByCode.get(sessionId, participantCode);
     if (!participant) {
-      participant = { id: id('participant'), sessionId, code: participantCode, displayName, role: 'presenter_voter', createdAt: now() };
+      participant = { id: id('participant'), sessionId, code: text(participantCode, 'code'), displayName: text(displayName, 'displayName'), role: 'presenter_voter', createdAt: now() };
       q.insertParticipant.run(participant);
     }
 
@@ -169,8 +190,8 @@ export function createService(db) {
       id: id('presenter'),
       sessionId,
       participantId: participant.id,
-      presentationOrder: presentationOrder ?? q.presenterCount.get(sessionId).n + 1,
-      topicTitle,
+      presentationOrder: int(presentationOrder, q.presenterCount.get(sessionId).n + 1),
+      topicTitle: text(topicTitle, 'topicTitle'),
     };
     try {
       q.insertPresenter.run(presenter);
@@ -188,11 +209,11 @@ export function createService(db) {
     if (!presenter || presenter.sessionId !== sessionId) throw new ApiError(404, 'Presenter not found');
     q.updatePresenter.run({
       id: presenterId,
-      presentationOrder: presentationOrder != null ? presentationOrder : presenter.presentationOrder,
-      topicTitle: topicTitle !== undefined ? topicTitle : presenter.topicTitle,
+      presentationOrder: presentationOrder != null ? int(presentationOrder, presenter.presentationOrder) : presenter.presentationOrder,
+      topicTitle: topicTitle !== undefined ? text(topicTitle, 'topicTitle') : presenter.topicTitle,
     });
     if (displayName != null && displayName.trim()) {
-      q.updateParticipantName.run(displayName.trim(), presenter.participantId);
+      q.updateParticipantName.run(text(displayName, 'displayName'), presenter.participantId);
     }
     const participant = q.participantById.get(presenter.participantId);
     return { id: presenterId, sessionId, participantId: presenter.participantId, code: participant.code, displayName: participant.displayName, presentationOrder: presentationOrder ?? presenter.presentationOrder, topicTitle: topicTitle ?? presenter.topicTitle };
@@ -216,7 +237,7 @@ export function createService(db) {
     if (!code || !displayName) throw new ApiError(400, 'code and displayName are required');
     let participant = q.participantByCode.get(sessionId, code);
     if (participant) return participant;
-    participant = { id: id('participant'), sessionId, code, displayName, role: 'voter', createdAt: now() };
+    participant = { id: id('participant'), sessionId, code: text(code, 'code'), displayName: text(displayName, 'displayName'), role: 'voter', createdAt: now() };
     q.insertParticipant.run(participant);
     return participant;
   }
@@ -233,7 +254,7 @@ export function createService(db) {
       id: id('participant'),
       sessionId,
       code,
-      displayName: (displayName && displayName.trim()) || 'Guest voter',
+      displayName: (displayName && text(displayName, 'displayName')) || 'Guest voter',
       role: 'voter',
       createdAt: now(),
     };

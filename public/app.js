@@ -73,7 +73,7 @@ function renderBallot() {
     const el = document.createElement(p.alreadyVoted ? 'div' : 'button');
     el.className = 'presenter' + (p.alreadyVoted ? ' voted' : '');
     el.innerHTML = `
-      <span class="code">${p.code}</span>
+      <span class="code">${escapeHtml(p.code)}</span>
       <span class="name">${escapeHtml(p.displayName)}</span>
       <span class="status">${p.alreadyVoted ? '✓ โหวตแล้ว' : 'ยังไม่โหวต'}</span>`;
     if (!p.alreadyVoted) el.addEventListener('click', () => openVote(p));
