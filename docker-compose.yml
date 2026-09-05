@@ -9,6 +9,7 @@ services:
     build: .
     image: ${VOTE_IMAGE:-system-design-voting:latest}
     container_name: vote
+    mem_limit: 256m
     restart: unless-stopped
     environment:
       - PORT=3000
@@ -21,6 +22,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: vote-cloudflared
+    mem_limit: 128m
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
