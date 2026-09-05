@@ -28,7 +28,7 @@ npm start             # เปิดเซิร์ฟเวอร์ที่ h
 ```
 
 - Voter UI: <http://localhost:3000/>
-- Admin UI: <http://localhost:3000/admin.html>
+- Admin UI: <http://localhost:3000/admin/>
 
 ### วิธีใช้แบบเร็ว
 1. เปิด Admin UI → กด **Seed ตัวอย่าง** (สร้าง 5 หมวด + a1..a10 และเปิดโหวตให้เลย)
@@ -41,20 +41,20 @@ npm start             # เปิดเซิร์ฟเวอร์ที่ h
 ## API
 | Method | Path | หน้าที่ |
 | --- | --- | --- |
-| POST | `/voting-sessions` | สร้างรอบโหวต (status = draft, ได้ `joinCode` มาด้วย) |
-| POST | `/voting-sessions/{id}/categories` | เพิ่มประเภทคะแนน |
-| PATCH | `/voting-sessions/{id}/categories/{catId}` | แก้ไขประเภทคะแนน (ชื่อ/คำอธิบาย/ลำดับ/isActive) |
-| DELETE | `/voting-sessions/{id}/categories/{catId}` | ลบประเภทคะแนน (บล็อกถ้ามีคะแนนแล้ว) |
-| POST | `/voting-sessions/{id}/presenters` | เพิ่มผู้นำเสนอ (ไม่จำกัดจำนวน) |
-| PATCH | `/voting-sessions/{id}/presenters/{presenterId}` | แก้ไขผู้นำเสนอ (ชื่อ/ลำดับ/หัวข้อ) |
-| DELETE | `/voting-sessions/{id}/presenters/{presenterId}` | ลบผู้นำเสนอ (บล็อกถ้ามีโหวตแล้ว) |
+| POST | `/admin/sessions` | สร้างรอบโหวต (status = draft, ได้ `joinCode` มาด้วย) |
+| POST | `/admin/sessions/{id}/categories` | เพิ่มประเภทคะแนน |
+| PATCH | `/admin/sessions/{id}/categories/{catId}` | แก้ไขประเภทคะแนน (ชื่อ/คำอธิบาย/ลำดับ/isActive) |
+| DELETE | `/admin/sessions/{id}/categories/{catId}` | ลบประเภทคะแนน (บล็อกถ้ามีคะแนนแล้ว) |
+| POST | `/admin/sessions/{id}/presenters` | เพิ่มผู้นำเสนอ (ไม่จำกัดจำนวน) |
+| PATCH | `/admin/sessions/{id}/presenters/{presenterId}` | แก้ไขผู้นำเสนอ (ชื่อ/ลำดับ/หัวข้อ) |
+| DELETE | `/admin/sessions/{id}/presenters/{presenterId}` | ลบผู้นำเสนอ (บล็อกถ้ามีโหวตแล้ว) |
 | GET  | `/voting-sessions/by-code/{code}` | resolve join code → session |
 | POST | `/voting-sessions/{id}/join` | ผู้โหวต self-register (คืน `voterId` สำหรับจำในอุปกรณ์) |
-| POST | `/voting-sessions/{id}/open` | เปิดรอบโหวต (ต้องมี ≥1 หมวด และ ≥1 presenter) |
+| POST | `/admin/sessions/{id}/open` | เปิดรอบโหวต (ต้องมี ≥1 หมวด และ ≥1 presenter) |
 | GET  | `/voting-sessions/{id}/ballot?voterId=` | ดึง ballot + สถานะ voted/not voted |
 | POST | `/voting-sessions/{id}/votes` | ส่งคะแนน 1 ชุด |
-| GET  | `/voting-sessions/{id}/results` | ผลคะแนน + อันดับ |
-| POST | `/voting-sessions/{id}/close` | ปิดรอบโหวต |
+| GET  | `/admin/sessions/{id}/results` | ผลคะแนน + อันดับ |
+| POST | `/admin/sessions/{id}/close` | ปิดรอบโหวต |
 
 รหัสข้อผิดพลาดหลัก: `409` โหวตซ้ำ / ลบของที่มีข้อมูลอ้างอิง, `403` รอบโหวตไม่เปิด, `400` คะแนนไม่ครบ/นอกช่วง หรือ presenter ไม่อยู่ในรอบ
 
@@ -90,3 +90,5 @@ Production รันเป็น **Git stack** บน Portainer (host clone repo
 4. Deploy — Portainer จะ build + รัน `vote` และ `vote-cloudflared`
 
 ตัวแปรที่ปรับได้: `TUNNEL_TOKEN` (จำเป็น), `VOTE_IMAGE` (ใช้ image จาก registry แทนการ build)
+
+> **หมายเหตุด้านความปลอดภัย (SEC-13):** endpoint ฝั่งผู้ดูแลทั้งหมดอยู่ใต้ `/admin` และถูกคุมด้วย Cloudflare Access ที่ระดับ edge ส่วน endpoint ของผู้โหวต (`by-code`, `join`, `ballot`, `votes`) เปิดสาธารณะโดยตั้งใจ — **อย่าย้าย path เหล่านั้น** หน้าโหวตเรียกอยู่ตรงๆ

@@ -23,7 +23,7 @@ async function createSession() {
   const name = $('sessionName').value.trim();
   if (!name) return toast('กรอกชื่อรอบโหวต', 'err');
   try {
-    const s = await api('/voting-sessions', json({ name, eventDate: $('eventDate').value || null }));
+    const s = await api('/admin/sessions', json({ name, eventDate: $('eventDate').value || null }));
     $('activeSessionId').value = s.id;
     toast(`สร้างรอบโหวตแล้ว: ${s.id}`);
     refresh();
@@ -35,7 +35,7 @@ async function seedSample() {
   let id = activeId();
   try {
     if (!id) {
-      const s = await api('/voting-sessions', json({ name: $('sessionName').value.trim() || 'System Design Vote — Today', eventDate: $('eventDate').value || null }));
+      const s = await api('/admin/sessions', json({ name: $('sessionName').value.trim() || 'System Design Vote — Today', eventDate: $('eventDate').value || null }));
       id = s.id;
       $('activeSessionId').value = id;
     }
@@ -47,7 +47,7 @@ async function seedSample() {
       ['🎤 Presentation', 'เล่าได้น่าสนใจแค่ไหน', 5],
     ];
     for (const [name, description, displayOrder] of cats) {
-      await api(`/voting-sessions/${id}/categories`, json({ name, description, displayOrder }));
+      await api(`/admin/sessions/${id}/categories`, json({ name, description, displayOrder }));
     }
     toast('Seed หมวดคะแนนสำเร็จ (4 หมวด — เพิ่มผู้นำเสนอเอง)');
     refresh();
@@ -67,7 +67,7 @@ function toggleSessions() {
 
 async function loadSessionList() {
   try {
-    const sessions = await api('/voting-sessions');
+    const sessions = await api('/admin/sessions');
     $('sessionCount').textContent = `(${sessions.length})`;
     const list = $('sessionList');
     if (!sessions.length) { list.innerHTML = '<li class="muted">ยังไม่มี session</li>'; return; }
@@ -100,7 +100,7 @@ async function deleteSession(s) {
   const detail = s.votes > 0 ? `\n\n⚠️ มีโหวต ${s.votes} รายการ จะถูกลบไปด้วย` : '';
   if (!confirm(`ลบ session "${s.name}" (${s.id}) ถาวร?${detail}`)) return;
   try {
-    await api(`/voting-sessions/${s.id}`, { method: 'DELETE' });
+    await api(`/admin/sessions/${s.id}`, { method: 'DELETE' });
     if (activeId() === s.id) $('activeSessionId').value = '';
     toast('ลบ session แล้ว');
     loadSessionList();
@@ -110,7 +110,7 @@ async function deleteSession(s) {
 async function addCategory() {
   if (!activeId()) return toast('เลือก session ก่อน', 'err');
   try {
-    await api(`/voting-sessions/${activeId()}/categories`, json({
+    await api(`/admin/sessions/${activeId()}/categories`, json({
       name: $('catName').value.trim(),
       description: $('catDesc').value.trim() || null,
       displayOrder: Number($('catOrder').value) || 0,
@@ -125,7 +125,7 @@ async function addCategory() {
 async function addPresenter() {
   if (!activeId()) return toast('เลือก session ก่อน', 'err');
   try {
-    await api(`/voting-sessions/${activeId()}/presenters`, json({
+    await api(`/admin/sessions/${activeId()}/presenters`, json({
       participantCode: $('pCode').value.trim(),
       displayName: $('pName').value.trim(),
       presentationOrder: Number($('pOrder').value) || undefined,
@@ -139,13 +139,13 @@ async function addPresenter() {
 
 async function openSession() {
   if (!activeId()) return toast('เลือก session ก่อน', 'err');
-  try { const s = await api(`/voting-sessions/${activeId()}/open`, json({})); toast(`เปิดรอบโหวตแล้ว (${s.status})`); refresh(); }
+  try { const s = await api(`/admin/sessions/${activeId()}/open`, json({})); toast(`เปิดรอบโหวตแล้ว (${s.status})`); refresh(); }
   catch (e) { toast(e.message, 'err'); }
 }
 
 async function closeSession() {
   if (!activeId()) return toast('เลือก session ก่อน', 'err');
-  try { const s = await api(`/voting-sessions/${activeId()}/close`, json({})); toast(`ปิดรอบโหวตแล้ว (${s.status})`); refresh(); }
+  try { const s = await api(`/admin/sessions/${activeId()}/close`, json({})); toast(`ปิดรอบโหวตแล้ว (${s.status})`); refresh(); }
   catch (e) { toast(e.message, 'err'); }
 }
 
@@ -153,7 +153,7 @@ async function closeSession() {
 async function refresh() {
   if (!activeId()) return;
   try {
-    const session = await api(`/voting-sessions/${activeId()}`);
+    const session = await api(`/admin/sessions/${activeId()}`);
     $('statusBadge').innerHTML = ` — <span class="pill ${session.status}">${session.status}</span>`;
     if (session.joinCode) {
       $('joinCodeBox').classList.remove('hidden');
@@ -162,7 +162,7 @@ async function refresh() {
     }
 
     // We reuse the ballot endpoint for the setup listing; a dummy voterId just yields alreadyVoted=false.
-    const ballot = await api(`/voting-sessions/${activeId()}/ballot?voterId=__admin__`);
+    const ballot = await api(`/admin/sessions/${activeId()}/ballot?voterId=__admin__`);
     renderCategoryEditor(ballot.categories);
     renderPresenterEditor(ballot.presenters);
   } catch (e) { toast(e.message, 'err'); }
@@ -224,26 +224,26 @@ function renderPresenterEditor(presenters) {
 const patch = (body) => ({ method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
 async function saveCategory(id, body) {
-  try { await api(`/voting-sessions/${activeId()}/categories/${id}`, patch(body)); toast('บันทึกประเภทคะแนนแล้ว'); refresh(); }
+  try { await api(`/admin/sessions/${activeId()}/categories/${id}`, patch(body)); toast('บันทึกประเภทคะแนนแล้ว'); refresh(); }
   catch (e) { toast(e.message, 'err'); }
 }
 async function deleteCategory(id) {
-  try { await api(`/voting-sessions/${activeId()}/categories/${id}`, { method: 'DELETE' }); toast('ลบประเภทคะแนนแล้ว'); refresh(); }
+  try { await api(`/admin/sessions/${activeId()}/categories/${id}`, { method: 'DELETE' }); toast('ลบประเภทคะแนนแล้ว'); refresh(); }
   catch (e) { toast(e.message, 'err'); }
 }
 async function savePresenter(id, body) {
-  try { await api(`/voting-sessions/${activeId()}/presenters/${id}`, patch(body)); toast('บันทึกผู้นำเสนอแล้ว'); refresh(); }
+  try { await api(`/admin/sessions/${activeId()}/presenters/${id}`, patch(body)); toast('บันทึกผู้นำเสนอแล้ว'); refresh(); }
   catch (e) { toast(e.message, 'err'); }
 }
 async function deletePresenter(id) {
-  try { await api(`/voting-sessions/${activeId()}/presenters/${id}`, { method: 'DELETE' }); toast('ลบผู้นำเสนอแล้ว'); refresh(); }
+  try { await api(`/admin/sessions/${activeId()}/presenters/${id}`, { method: 'DELETE' }); toast('ลบผู้นำเสนอแล้ว'); refresh(); }
   catch (e) { toast(e.message, 'err'); }
 }
 
 async function loadResults() {
   if (!activeId()) return toast('เลือก session ก่อน', 'err');
   try {
-    const { results } = await api(`/voting-sessions/${activeId()}/results`);
+    const { results } = await api(`/admin/sessions/${activeId()}/results`);
     if (!results.length) { $('resultsArea').innerHTML = '<p class="muted">ยังไม่มีผลคะแนน</p>'; return; }
     const catNames = results[0].categoryAverages.map((c) => c.name);
     const head = `<tr><th>อันดับ</th><th>ผู้นำเสนอ</th><th class="num">โหวต</th>${catNames.map((n) => `<th class="num">${escapeHtml(n)}</th>`).join('')}<th class="num">รวมเฉลี่ย</th></tr>`;
