@@ -5,6 +5,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY src ./src
 COPY public ./public
+# Admin UI is deliberately outside public/ so express.static(public) can never serve it.
+COPY admin-ui ./admin-ui
 
 # ---- runtime stage: slim image, non-root, data on a mounted volume ----
 FROM node:22-bookworm-slim
@@ -15,6 +17,7 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
 COPY --from=build /app/public ./public
+COPY --from=build /app/admin-ui ./admin-ui
 COPY package.json ./
 
 # Persist the SQLite database outside the container layer.

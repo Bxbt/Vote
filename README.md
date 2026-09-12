@@ -28,7 +28,16 @@ npm start             # เปิดเซิร์ฟเวอร์ที่ h
 ```
 
 - Voter UI: <http://localhost:3000/>
-- Admin UI: <http://localhost:3000/admin/>
+- Admin UI: <http://localhost:3000/admin/> — **ต้องผ่าน Cloudflare Access**
+
+`/admin` ปิดตายเสมอถ้าไม่ได้ตั้ง `CF_ACCESS_TEAM_DOMAIN` และ `CF_ACCESS_AUD` (fail closed)
+สำหรับ dev บนเครื่องตัวเองเท่านั้น เปิดด้วย:
+
+```bash
+CF_ACCESS_DEV_BYPASS=1 npm start   # /admin ไม่มี auth — ห้ามใช้นอกเครื่อง dev
+```
+
+ตัวแปรนี้ถูกเพิกเฉยเมื่อ `NODE_ENV=production` และไม่เปิดให้เองโดยอัตโนมัติ
 
 ### วิธีใช้แบบเร็ว
 1. เปิด Admin UI → กด **Seed ตัวอย่าง** (สร้าง 5 หมวด + a1..a10 และเปิดโหวตให้เลย)
@@ -65,10 +74,15 @@ npm start             # เปิดเซิร์ฟเวอร์ที่ h
 src/
   db.js         schema + การเชื่อมต่อ SQLite (ตาราง + index + constraint)
   service.js    business logic ทั้งหมด (FR-1..FR-14) — validation, duplicate guard, ranking
-  server.js     Express routes ตาม API spec
+  server.js     Express routes + path guard + Access gate
+  cf-access.js  ตรวจ Cloudflare Access JWT (RS256 + JWKS) ด้วย node:crypto ล้วน
   seed.js       สร้างข้อมูลตัวอย่าง
-public/         Voter UI + Admin UI
-test/           voting.test.js — TC-1..TC-14
+public/         Voter UI (static root — เปิดสาธารณะทั้งหมด)
+admin-ui/       Admin UI — อยู่นอก static root โดยเจตนา เสิร์ฟผ่าน /admin ที่ผ่าน auth แล้วเท่านั้น
+test/
+  voting.test.js         TC-1..TC-14 (business logic)
+  cf-access.test.js      การตรวจ JWT: signature, iss, aud, exp, alg confusion, JWKS
+  admin-boundary.test.js HTTP regression ของขอบเขต /admin (SEC-14)
 ```
 
 ## Deploy (Docker / Portainer + Cloudflare Tunnel)
@@ -89,6 +103,69 @@ Production รันเป็น **Git stack** บน Portainer (host clone repo
 3. **Cloudflare (Zero Trust → Tunnels)**: public hostname `vote.bboybezz.xyz` → service `http://vote:3000`
 4. Deploy — Portainer จะ build + รัน `vote` และ `vote-cloudflared`
 
-ตัวแปรที่ปรับได้: `TUNNEL_TOKEN` (จำเป็น), `VOTE_IMAGE` (ใช้ image จาก registry แทนการ build)
+ตัวแปรที่ปรับได้: `TUNNEL_TOKEN` (จำเป็น), `CF_ACCESS_TEAM_DOMAIN` + `CF_ACCESS_AUD` (**จำเป็น** ไม่งั้น `/admin` ปิดตาย — ดู SEC-14 ด้านล่าง), `VOTE_IMAGE` (ใช้ image จาก registry แทนการ build)
 
-> **หมายเหตุด้านความปลอดภัย (SEC-13):** endpoint ฝั่งผู้ดูแลทั้งหมดอยู่ใต้ `/admin` และถูกคุมด้วย Cloudflare Access ที่ระดับ edge ส่วน endpoint ของผู้โหวต (`by-code`, `join`, `ballot`, `votes`) เปิดสาธารณะโดยตั้งใจ — **อย่าย้าย path เหล่านั้น** หน้าโหวตเรียกอยู่ตรงๆ
+> **หมายเหตุด้านความปลอดภัย (SEC-13):** endpoint ฝั่งผู้ดูแลทั้งหมดอยู่ใต้ `/admin` ส่วน endpoint ของผู้โหวต (`by-code`, `join`, `ballot`, `votes`) เปิดสาธารณะโดยตั้งใจ — **อย่าย้าย path เหล่านั้น** หน้าโหวตเรียกอยู่ตรงๆ
+
+---
+
+## ความปลอดภัยของขอบเขต /admin (SEC-14)
+
+### ปัญหาเดิม
+Cloudflare Access จับคู่ policy จาก **raw path** ส่วน `express.static` จะ **decode** path ก่อนหาไฟล์
+`/admin%2f` จึงเป็นคนละ path ในสายตา Access (ไม่ตรง `/admin`) แต่ถอดเป็น `/admin/` ในสายตา static
+ผลคือ `GET /admin%2f` ได้ `301 Location: /admin%2f/` แล้ว `/admin%2f/` เสิร์ฟหน้า Admin UI ออกมา
+จัดเป็น **CWE-647 (Use of Non-Canonical URL Paths for Authorization Decisions) / OWASP A01** ระดับ Low
+(ยืนยันแล้วว่ารั่วเฉพาะ Admin UI — Admin API ไม่ถูก bypass เพราะ Express Router จับคู่จาก raw path เหมือน Access)
+
+นี่ไม่ใช่ช่องโหว่ของ Express — dependency ทั้งหมดเป็นรุ่นปัจจุบัน (express 4.22.2, send 0.19.2,
+serve-static 1.16.3, path-to-regexp 0.1.13, qs 6.16.0) เป็น **canonicalization / configuration mismatch** ล้วนๆ
+
+### ที่แก้ไปแล้วฝั่ง origin (defense in depth 3 ชั้น)
+1. **Admin UI ย้ายออกจาก static root** — อยู่ที่ `admin-ui/` ไม่ใช่ `public/admin/`
+   `express.static(public)` จึงไปไม่ถึงไม่ว่าจะ encode path แบบไหน
+2. **Path guard เป็น middleware ตัวแรกสุด** — ตรวจ `req.originalUrl` ดิบ แล้วตอบ `400` ทันทีเมื่อเจอ
+   `%2f` `%2F` `%5c` `%5C` `%25` (double encoding เช่น `%252f`) literal backslash หรือ percent-encoding ที่ผิดรูป
+   ตอบเป็น JSON ไม่ redirect ไม่ส่ง HTML/JS และ **ไม่ decode ซ้ำแล้วเอาผลไป authorize**
+3. **Authorization ที่ชั้นแอป** — ตรวจ `Cf-Access-Jwt-Assertion` (fallback: cookie `CF_Authorization`)
+   ด้วย public key จาก `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`
+   ตรวจ signature (RS256 เท่านั้น) + `iss` + `aud` + `exp`/`nbf`/`iat` ก่อนเสิร์ฟทั้ง **UI และ API**
+   ไม่เชื่อเพียงว่ามี header
+
+ตั้งค่าด้วย env vars:
+
+| ตัวแปร | ค่า |
+|---|---|
+| `CF_ACCESS_TEAM_DOMAIN` | เช่น `yourteam.cloudflareaccess.com` |
+| `CF_ACCESS_AUD` | Application Audience (AUD) tag ของ Access application |
+| `CF_ACCESS_DEV_BYPASS` | `1` = ปิด auth (dev เท่านั้น ถูกเพิกเฉยเมื่อ `NODE_ENV=production`) |
+
+ถ้าตัวแปรหาย/ผิด → `/admin` ตอบ `403` ให้ทุกคน (**fail closed**) และ log บรรทัด `SECURITY:` ตอน start
+
+### ยังต้องทำด้วยมือบน Cloudflare (ยังไม่ได้ทำให้)
+การแก้ฝั่ง origin ทำให้ปลอดภัยแม้ Access ถูก bypass แต่ควรอุดที่ edge ด้วย:
+
+1. **Normalize หรือ block encoded slash ก่อน Access ประเมิน policy**
+   ตั้ง Transform Rule ให้ normalize URL ที่ขา incoming (หรือ WAF custom rule block `%2f`/`%5c` ใน path)
+   <https://developers.cloudflare.com/rules/transform/examples/normalize-encoded-slash/>
+2. **ตรวจว่า Access policy ครอบ `/admin` และ descendant ทุกระดับ**
+   path ของ Access application จับคู่แบบ prefix บน raw path — ยืนยันว่า `/admin`, `/admin/`,
+   `/admin/sessions/...` อยู่ในขอบเขตเดียวกันทั้งหมด
+   <https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/>
+3. **ระยะยาว: แยก Admin ไป hostname เฉพาะ** เช่น `admin-vote.bboybezz.xyz` แล้วให้ Access ครอบทั้ง hostname
+   การ match ระดับ hostname ไม่มีปัญหา path canonicalization เลย
+4. **อ้างอิงวิธี validate JWT** ที่ implement ไว้ใน `src/cf-access.js`
+   <https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/>
+
+### การทดสอบ
+`test/admin-boundary.test.js` ยิง HTTP จริงและยืนยันว่าเมื่อไม่มี token ที่ถูกต้อง ทุก variant ต่อไปนี้
+ได้เฉพาะ `400/401/403/404` ไม่มี `200` ไม่มี `301` และ body ไม่มี Admin HTML/JS:
+
+```
+/admin  /admin/  /admin/index.html  /admin/admin.js
+/admin%2f  /admin%2F/  /admin%252f  /admin%5c  /admin%5Cadmin.js
+/admin%2fadmin.js  /admin%2fsessions  /admin\admin.js  /admin%2e%2e%2f  /admin%zz
+```
+
+พร้อมกับยืนยันว่า token ที่ถูกต้องยังเข้า Admin UI/API ได้ครบ GET/POST/PATCH/DELETE
+และ public voter flow (join by code → ballot → vote) ยังทำงานปกติ
